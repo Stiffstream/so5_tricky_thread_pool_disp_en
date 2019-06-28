@@ -15,7 +15,7 @@ void run_example(const args_t & args ) {
             // adv_thread_pool-диспетчере.
             namespace disp = so_5::disp::adv_thread_pool;
             coop.make_agent_with_binder<a_device_manager_t>(
-                  disp::create_private_disp(env, args.thread_pool_size_)->
+                  disp::make_dispatcher(env, args.thread_pool_size_).
                         binder(disp::bind_params_t{}),
                   args,
                   dashboard_mbox);
