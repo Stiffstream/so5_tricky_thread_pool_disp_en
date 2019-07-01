@@ -12,47 +12,11 @@
 // диспетчера.
 //
 class tricky_dispatcher_t
-      : public std::enable_shared_from_this<tricky_dispatcher_t> {
-   friend class tricky_event_queue_t;
-   friend class tricky_disp_binder_t;
-
-   class tricky_event_queue_t : public so_5::event_queue_t {
-      tricky_dispatcher_t & disp_;
-   public:
-      tricky_event_queue_t(tricky_dispatcher_t & disp) : disp_{disp} {}
-
-      virtual void push(so_5::execution_demand_t demand) override {
-         disp_.push_demand(std::move(demand));
-      }
-   };
-
-   class tricky_disp_binder_t : public so_5::disp_binder_t {
-      std::shared_ptr<tricky_dispatcher_t> disp_;
-   public:
-      tricky_disp_binder_t(std::shared_ptr<tricky_dispatcher_t> disp)
-            : disp_{std::move(disp)} {}
-
-      virtual so_5::disp_binding_activator_t bind_agent(
-            so_5::environment_t &,
-            so_5::agent_ref_t agent) override {
-         return [d = disp_, agent] {
-            agent->so_bind_to_dispatcher(d->event_queue_);
-         };
-      }
-
-      virtual void unbind_agent(
-            so_5::environment_t &,
-            so_5::agent_ref_t) override {
-         // Ничего не нужно делать.
-      }
-   };
+      : public so_5::disp_binder_t
+		, public so_5::event_queue_t {
 
    // Тип контейнера для рабочих очередей.
    using thread_pool_t = std::vector<std::thread>;
-
-   // Объект, реализующий интерфейс so_5::event_queue_t для того,
-   // чтобы выполнять привязку агентов к диспетчеру.
-   tricky_event_queue_t event_queue_;
 
    // Каналы, которые будут использоваться в качестве очередей сообщений.
    so_5::mchain_t init_reinit_ch_;
@@ -119,7 +83,7 @@ class tricky_dispatcher_t
    // Тело рабочей нити первого типа.
    void first_type_thread_body() {
       // Выполняем работу до тех пор, пока не будут закрыты все каналы.
-      so_5::select(so_5::from_all(),
+      so_5::select(so_5::from_all().handle_all(),
             case_(init_reinit_ch_, exec_demand_handler),
             case_(other_demands_ch_, exec_demand_handler));
    }
@@ -127,12 +91,28 @@ class tricky_dispatcher_t
    // Тело рабочей нити второго типа.
    void second_type_thread_body() {
       // Выполняем работу до тех пор, пока не будут закрыты все каналы.
-      so_5::select(so_5::from_all(),
+      so_5::select(so_5::from_all().handle_all(),
             case_(other_demands_ch_, exec_demand_handler));
    }
 
+	virtual void preallocate_resources( so_5::agent_t & /*agent*/ ) override {
+		// There is no need to do something.
+	}
+
+	virtual void undo_preallocation( so_5::agent_t & /*agent*/ ) noexcept override {
+		// There is no need to do something.
+	}
+
+	virtual void bind( so_5::agent_t & agent ) noexcept override {
+		agent.so_bind_to_dispatcher( *this );
+	}
+
+	virtual void unbind( so_5::agent_t & /*agent*/ ) noexcept override {
+		// There is no need to do something.
+	}
+
    // Сохранение очередной заявки в очередях заявок.
-   void push_demand(so_5::execution_demand_t demand) {
+   void push(so_5::execution_demand_t demand) override {
       if(init_device_type == demand.m_msg_type ||
             reinit_device_type == demand.m_msg_type) {
          // Эти заявки должны идти в свою собственную очередь.
@@ -151,8 +131,7 @@ public:
          so_5::environment_t & env,
          // Количество рабочих потоков, которые должны быть созаны диспетчером.
          unsigned pool_size)
-         :  event_queue_{*this}
-         ,  init_reinit_ch_{so_5::create_mchain(env)}
+         :  init_reinit_ch_{so_5::create_mchain(env)}
          ,  other_demands_ch_{so_5::create_mchain(env)} {
       const auto [first_type_count, second_type_count] =
             calculate_pools_sizes(pool_size);
@@ -165,14 +144,9 @@ public:
    }
 
    // Метод-фабрика для создания экземпляров диспетчера.
-   static auto make(so_5::environment_t & env, unsigned pool_size) {
+   static so_5::disp_binder_shptr_t make(
+			so_5::environment_t & env, unsigned pool_size) {
       return std::make_shared<tricky_dispatcher_t>(env, pool_size);
-   }
-
-   // Создать биндера, который сможет привязать агента к этому диспетчеру.
-   so_5::disp_binder_unique_ptr_t binder() {
-      return so_5::disp_binder_unique_ptr_t{
-            new tricky_disp_binder_t{shared_from_this()}};
    }
 };
 
@@ -192,7 +166,7 @@ void run_example(const args_t & args ) {
             // Агента для управления устройствами запускаем на отдельном
             // хитром диспетчере.
             coop.make_agent_with_binder<a_device_manager_t>(
-                  tricky_dispatcher_t::make(env, args.thread_pool_size_)->binder(),
+                  tricky_dispatcher_t::make(env, args.thread_pool_size_),
                   args,
                   dashboard_mbox);
          });
