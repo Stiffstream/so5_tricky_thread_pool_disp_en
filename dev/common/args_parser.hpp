@@ -25,7 +25,7 @@ parse_args(int argc, char ** argv) {
 
    bool help_requested = false;
 
-   // Подготавливаем парсер аргументов командной строки.
+   // Prepare the command-line parser.
    using namespace clara;
 
    auto cli = Opt(device_count, "device_count")["-d"]["--device-count"]
@@ -59,9 +59,9 @@ parse_args(int argc, char ** argv) {
                io_op_time))
       | Help(help_requested);
 
-   // Выполняем парсинг...
+	// Perform the parsing...
    auto parse_result = cli.parse(Args(argc, argv));
-   // ...и бросаем исключение если столкнулись с ошибкой.
+   // ...and throw an exception in the case of error.
    if(!parse_result)
       throw std::runtime_error("Invalid command line: "
             + parse_result.errorMessage());

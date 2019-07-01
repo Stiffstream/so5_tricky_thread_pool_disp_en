@@ -3,7 +3,7 @@
 #include <chrono>
 #include <iostream>
 
-// Диапазон значений для темпа операций ввода-вывода.
+// The range for valus of IO-operation frequence.
 struct io_ops_period_range_t {
    static constexpr std::chrono::milliseconds default_left{ 100 };
    static constexpr std::chrono::milliseconds default_right{ 300 };
@@ -21,23 +21,23 @@ struct args_t {
    static constexpr std::chrono::milliseconds default_device_init_time{ 1250 };
    static constexpr std::chrono::milliseconds default_io_op_time{ 50 };
 
-   // Количество устройств, которое нужно имитировать.
+	// The count of simulating devices.
    unsigned device_count_{ default_device_count };
 
-   // Количество рабочих потоков у диспетчера.
+	// The count of worker thread for a thread-pool dispatcher.
    unsigned thread_pool_size_{ default_thread_pool_size };
 
-   // Максимальное количество операций ввода-вывода до переинициализации устройства.
+	// The max count of IO-ops before the reinit of a device.
    unsigned io_ops_before_reinit_{ default_io_ops_defore_reinit };
-   // Максимальное количество переинициализаций перед пересозданием устройства.
+	// The max count of reinits before the recreate of a device.
    unsigned reinits_before_recreate_{ default_reinits_before_recreate };
 
-   // Темп выполнения операций ввода-вывода.
+	// Frequence of IO-operattions.
    io_ops_period_range_t io_ops_period_;
 
-   // Длительность операций инициализации и переинициализации устройств.
+	// The duration of the init and reinit operations.
    std::chrono::milliseconds device_init_time_{ default_device_init_time };
-   // Длительность операций ввода-вывода.
+	// The duration of an IO-operation.
    std::chrono::milliseconds io_op_time_{ default_io_op_time };
 };
 

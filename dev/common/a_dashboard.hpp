@@ -10,18 +10,18 @@ class a_dashboard_t final : public so_5::agent_t {
    struct show_stats_t final : public so_5::signal_t {};
 
 public:
-   // Тип, который мы будем использовать для отсчета времени.
+	// Type to be used for time counting.
    using clock_t = std::chrono::steady_clock;
 
-   // Тип операции, к которой относится информация о задержке сообщения.
+	// Type of operation for that an information about the delay is related.
    enum class op_type_t : std::size_t { init = 0, io_op = 1, reinit = 2 };
 
    static constexpr std::size_t to_size_t(op_type_t v) {
       return static_cast<std::size_t>(v);
    }
 
-   // Сообщение с информацией о том, сколько времени
-   // сообщение добиралось до агента.
+	// A message with information about the time spent during
+	// the delivery of a message.
    struct delay_info_t final : public so_5::message_t {
       op_type_t op_type_;
       clock_t::duration pause_;
@@ -38,12 +38,12 @@ public:
    }
 
    virtual void so_evt_start() override {
-      // Запускаем периодическое сообщение для отображения статистики.
+		// Initiate a periodic message for showing the current statistics.
       stats_timer_ = so_5::send_periodic<show_stats_t>(*this,
             std::chrono::milliseconds::zero(),
             std::chrono::seconds{5});
 
-      // Создаем csv-файл, в который будем сохранять текущие значения.
+		// Make a csv-file for storing the current values.
       create_csv_file();
    }
 
@@ -79,8 +79,7 @@ private:
    so_5::timer_id_t stats_timer_;
    std::uint_fast64_t counter_{};
 
-   // Файл, который будет использоваться для записи текущих значений
-   // в формате csv.
+	// A file for storing the current values in csv-format.
    std::ofstream csv_file_;
 
    void on_delay_info(mhood_t<delay_info_t> cmd) {
@@ -102,8 +101,8 @@ private:
    }
 
    void create_csv_file() {
-      // Создаем csv-файл, в который будем сохранять текущие значения.
-      // В качестве имени будем использовать текущее время в миллисекундах.
+		// Create a csv-file for storing the current values.
+		// The current time in milliseconds will be used as the file name.
       using namespace std::chrono;
 
       csv_file_.exceptions(std::ofstream::badbit | std::ofstream::failbit);
@@ -144,7 +143,7 @@ private:
             ms(data.total_.avg()), data.total_.total_events_,
             ms(data.last_slot_.avg()), data.last_slot_.total_events_);
 
-      // Обнуляем данные за последний период.
+		// Data for the last period should be dropped.
       data.last_slot_ = time_slot_data_t{};
    }
 };

@@ -10,35 +10,35 @@ public:
    using clock_t = a_dashboard_t::clock_t;
 
    struct msg_base_t : public so_5::message_t {
-      // Время, в которое ожидается прибытие сообщения.
+		// Time of expected arrival of a message.
       clock_t::time_point expected_time_;
 
-      // Конструктор по умолчанию. В качестве времени ожидаемого
-      // прибытия берется текущее время.
+		// The default constructor.
+		// Uses the current time as expected_time_'s value.
       msg_base_t()
          :  expected_time_(clock_t::now())
       {}
-      // Инициализирующий конструктор. Ожидаемое время прибытия задается явно.
+		// Initializing constructor.
+		// A value for expected_time_ is specified explicitelly.
       msg_base_t(clock_t::time_point expected_time)
          :  expected_time_(expected_time)
       {}
    };
 
-   // Описание одного устройства.
-   // Этот объект будет создаваться при старте и затем будет
-   // пересылаться внутри сообщений, относящихся к этому устройству.
+	// A description of one device.
+	// An object of that type is created at the start and then is resent
+	// inside device-related messages.
    struct device_t final {
       using id_t = std::uint_fast64_t;
-      // Уникальный идентификатор устройства.
+		// The unique ID of a device.
       id_t id_;
-      // Время между операциями ввода вывода для этого устройства.
-      // Вычисляется заново при переинициализации устройства.
+		// A time between IO-ops for that device.
+		// Recalculated at reinits of the device.
       std::chrono::milliseconds io_period_;
-      // Количество оставшихся операций ввода вывода.
-      // При достижении нуля инициируется операция переинициализации
-      // устройства.
+		// The count of remaining IO-ops for that device.
+		// The reinit is initialized when remaining_io_ops_ becomes zero.
       unsigned remaining_io_ops_;
-      // Количество оставшихся операций переинициализации устройства.
+		// The count of remaining reinits for that device.
       unsigned remaining_reinits_;
 
       device_t(
@@ -55,21 +55,21 @@ public:
 
    using device_uptr_t = std::unique_ptr<device_t>;
 
-   // Сообщение о необходимости инициализации нового устройства.
+	// A message about necessity of initialization of a new device.
    struct init_device_t final : public msg_base_t {
       device_t::id_t id_;
 
       init_device_t(device_t::id_t id) : id_(id) {}
    };
 
-   // Сообщение о необходимости переинициализации устройства.
+	// A message about necessity of reinitialization of a device.
    struct reinit_device_t final : public msg_base_t {
       device_uptr_t device_;
 
       reinit_device_t(device_uptr_t device) : device_(std::move(device)) {}
    };
 
-   // Сообщение о необходимости выполнить IO-операцию на устройстве.
+	// A message about necessity to perform an IO-op on a device.
    struct perform_io_t final : public msg_base_t {
       device_uptr_t device_;
 
@@ -94,8 +94,8 @@ public:
          .event(&a_device_manager_t::on_perform_io, so_5::thread_safe);
    }
 
-   virtual void so_evt_start() override {
-      // Отсылаем сообщения для создания новых устройств в нужном количестве.
+   void so_evt_start() override {
+		// Send a bunch of messages for the creation of new devices.
       device_t::id_t id{};
       for(unsigned i = 0; i != args_.device_count_; ++i, ++id)
          so_5::send<init_device_t>(*this, id);
@@ -106,11 +106,11 @@ private:
    const so_5::mbox_t dashboard_mbox_;
 
    void on_init_device(mhood_t<init_device_t> cmd) const {
-      // Обновим статистику по этой операции.
+		// Update the stats for that op.
       handle_msg_delay(a_dashboard_t::op_type_t::init, *cmd);
 
-      // Нужно создать новое устройство и проимитировать паузу,
-      // связанную с его инициализацией.
+		// A new device should be created.
+		// We should imitate a pause related to the device initialization.
       auto dev = std::make_unique<device_t>(cmd->id_,
             calculate_io_period(),
             calculate_io_ops_before_reinit(),
@@ -118,49 +118,47 @@ private:
 
       std::this_thread::sleep_for(args_.device_init_time_);
 
-      // Отсылаем первое сообщение о необходимости выполнить IO-операцию
-      // на этом устройстве.
+		// Send a message for the first IO-op on that device.
       send_perform_io_msg(std::move(dev));
    }
 
    void on_reinit_device(mutable_mhood_t<reinit_device_t> cmd) const {
-      // Обновим статистику по этой операции.
+		// Update the stats for that op.
       handle_msg_delay(a_dashboard_t::op_type_t::reinit, *cmd);
 
-      // Нужно обновить основные параметры устройства после переинициализации.
+		// The main params of the device should be updated.
       cmd->device_->io_period_ = calculate_io_period();
       cmd->device_->remaining_io_ops_ = calculate_io_ops_before_reinit();
       cmd->device_->remaining_reinits_ -= 1;
 
-      // Имитируем задержку операции переинициализации устройства.
-      // Переинициализация выполняется 2/3 от времени инициализации.
+		// Simulate a pause of reinitializing the device.
+		// Reinitialization takes 2/3 from init's time.
       std::this_thread::sleep_for((args_.device_init_time_/3)*2);
 
-      // Продолжаем выполнять IO-операции с этим устройством.
+		// Continue to do IO-op on that device.
       send_perform_io_msg(std::move(cmd->device_));
    }
 
    void on_perform_io(mutable_mhood_t<perform_io_t> cmd) const {
-      // Обновим статистику по этой операции.
+		// Update the stats for that op.
       handle_msg_delay(a_dashboard_t::op_type_t::io_op, *cmd);
 
-      // Выполняем задержку имитируя реальную IO-операцию.
+		// Simulate a pause for IO-op.
       std::this_thread::sleep_for(args_.io_op_time_);
 
-      // Количество оставшихся IO-операций должно уменьшиться.
+		// The remaining count of IO-ops should be decremented.
       cmd->device_->remaining_io_ops_ -= 1;
-      // Возможно, пришло время переинициализировать устройство.
-      // Или даже пересоздавать, если исчерпан лимит попыток переинициализации.
+		// Maybe it is time to reinit or recreate the device?
       if(0 == cmd->device_->remaining_io_ops_) {
          if(0 == cmd->device_->remaining_reinits_)
-            // Устройство нужно пересоздать. Под тем же самым идентификатором.
+				// The device should recreated. Using the same ID.
             so_5::send<init_device_t>(*this, cmd->device_->id_);
          else
-            // Попытки переинициализации еще не исчерпаны.
+				// There are remaining reinit attempts.
             so_5::send<so_5::mutable_msg<reinit_device_t>>(*this, std::move(cmd->device_));
       }
       else
-         // Время переинициализации еще не пришло, продолжаем IO-операции.
+			// It isn't time for reinit yet. Continue IO-operations.
          send_perform_io_msg(std::move(cmd->device_));
    }
 
@@ -202,6 +200,5 @@ private:
       so_5::send_delayed<so_5::mutable_msg<perform_io_t>>(
             *this, period, std::move(dev), expected_time);
    }
-
 };
 
