@@ -5,8 +5,6 @@
 
 #include <fmt/ostream.h>
 
-#include <stack>
-
 // A class of dispatcher intended to process events of a_device_manager_t agent.
 class tricky_dispatcher_t
       : public so_5::disp_binder_t
