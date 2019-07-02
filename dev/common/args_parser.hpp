@@ -59,7 +59,7 @@ parse_args(int argc, char ** argv) {
                io_op_time))
       | Help(help_requested);
 
-	// Perform the parsing...
+   // Perform the parsing...
    auto parse_result = cli.parse(Args(argc, argv));
    // ...and throw an exception in the case of error.
    if(!parse_result)

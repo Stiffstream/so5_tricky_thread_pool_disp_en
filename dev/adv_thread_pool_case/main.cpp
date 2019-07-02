@@ -11,7 +11,7 @@ void run_example(const args_t & args ) {
             const auto dashboard_mbox =
                   coop.make_agent<a_dashboard_t>()->so_direct_mbox();
 
-				// Run the device manager on a separate adv_thread_pool-dispatcher.
+            // Run the device manager on a separate adv_thread_pool-dispatcher.
             namespace disp = so_5::disp::adv_thread_pool;
             coop.make_agent_with_binder<a_device_manager_t>(
                   disp::make_dispatcher(env, args.thread_pool_size_).
