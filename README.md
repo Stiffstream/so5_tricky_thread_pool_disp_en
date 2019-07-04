@@ -38,7 +38,7 @@ ruby build.rb
 Or an archive with a name like so5_tricky_thread_pool_disp_en-*-full.zip can be downloaded from [Downloads](https://bitbucket.org/sobjectizerteam/so5_tricky_thread_pool_disp_en/downloads/). После чего:
 
 ~~~~~{.sh}
-unzip so5_tricky_thread_pool_disp_ru-201907041100-full.zip
+unzip so5_tricky_thread_pool_disp_en-201907041100-full.zip
 cd so5_tricky_thread_pool_disp_en/dev
 ruby build.rb
 ~~~~~
