@@ -3,7 +3,7 @@
 # What is it?
 
 This is a demo of the creation of own thread_pool dispatcher for SObjectizer-5.6.
-This dispatcher uses own demands sheduling policy.
+This dispatcher uses own demands sheduling policy. The full description of this example can be found [here](https://bitbucket.org/sobjectizerteam/sobjectizer/wiki/so-5.6-docs/tutorials/tricky_thread_pool_disp/intro).
 
 There are two examples inside the repository:
 
