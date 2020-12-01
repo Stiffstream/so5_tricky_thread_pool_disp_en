@@ -33,7 +33,7 @@ cd dev
 ruby build.rb
 ```
 
-Or an archive with a name like `so5_tricky_thread_pool_disp_en-*-full.zip` can be downloaded from [Releases](https://github.com/Stiffstream/so5_tricky_thread_pool_disp_en/releases). После чего:
+Or an archive with a name like `so5_tricky_thread_pool_disp_en-*-full.zip` can be downloaded from [Releases](https://github.com/Stiffstream/so5_tricky_thread_pool_disp_en/releases). Then:
 
 ```sh
 unzip so5_tricky_thread_pool_disp_en-201909051300-full.zip
@@ -50,4 +50,3 @@ cp local-build.rb.example local-build.rb
 ```
 
 The content of `local-build.rb` can be edited to reflect the specific needs of a user.
-
