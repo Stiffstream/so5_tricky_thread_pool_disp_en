@@ -38,8 +38,8 @@ class tricky_dispatcher_t
    // Helper method for shutdown and join all threads.
    void shutdown_work_threads() noexcept {
       // Both channels should be closed first.
-      so_5::close_drop_content(init_reinit_ch_);
-      so_5::close_drop_content(other_demands_ch_);
+      so_5::close_drop_content(so_5::terminate_if_throws, init_reinit_ch_);
+      so_5::close_drop_content(so_5::terminate_if_throws, other_demands_ch_);
 
       // Now all threads can be joined.
       for(auto & t : work_threads_)
@@ -78,15 +78,15 @@ class tricky_dispatcher_t
    void first_type_thread_body() {
       // Run until all channels will be closed.
       so_5::select(so_5::from_all().handle_all(),
-            case_(init_reinit_ch_, exec_demand_handler),
-            case_(other_demands_ch_, exec_demand_handler));
+            receive_case(init_reinit_ch_, exec_demand_handler),
+            receive_case(other_demands_ch_, exec_demand_handler));
    }
 
    // The body for a thread of the second type.
    void second_type_thread_body() {
       // Run until all channels will be closed.
       so_5::select(so_5::from_all().handle_all(),
-            case_(other_demands_ch_, exec_demand_handler));
+            receive_case(other_demands_ch_, exec_demand_handler));
    }
 
    // Implementation of the methods inherited from disp_binder.

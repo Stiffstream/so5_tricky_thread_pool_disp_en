@@ -1,5 +1,5 @@
 MxxRu::arch_externals :so5 do |e|
-  e.url 'https://github.com/Stiffstream/sobjectizer/releases/download/v.5.6.1/so-5.6.1.zip'
+  e.url 'https://github.com/Stiffstream/sobjectizer/releases/download/v.5.7.3/so-5.7.3.zip'
 
   e.map_dir 'dev/so_5' => 'dev'
 end
@@ -11,7 +11,7 @@ MxxRu::arch_externals :clara do |e|
 end
 
 MxxRu::arch_externals :fmt do |e|
-  e.url 'https://github.com/fmtlib/fmt/archive/5.3.0.zip'
+  e.url 'https://github.com/fmtlib/fmt/archive/8.1.1.zip'
 
   e.map_dir 'include' => 'dev/fmt'
   e.map_dir 'src' => 'dev/fmt'
