@@ -12,7 +12,23 @@ There are two examples inside the repository:
 
 It is necessary to use a C++ compiler with support for C++17 (checked under gcc-7.3 and vc++ 15.9).
 
-Ruby and MxxRu are required. If someone needs a support for CMake please create an issue.
+CMake or Ruby+MxxRu are required.
+
+## Compilation with CMake
+
+The simplest way to use CMake is to download an archive with a name like `so5_tricky_thread_pool_disp_en-*-full.zip` from [Releases](https://github.com/Stiffstream/so5_tricky_thread_pool_disp_en/releases). Then:
+
+```sh
+unzip so5_tricky_thread_pool_disp_en-202204221030-full.zip
+cd so5_tricky_thread_pool_disp_en/dev
+mkdir cmake_build
+cd cmake_build
+cmake ..
+cmake --build . --config Release
+```
+
+The complied example should be inside `bin` subfolder.
+
 
 ## Compilation with MxxRu
 
