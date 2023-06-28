@@ -22,7 +22,7 @@ class tricky_dispatcher_t
 
    static const std::type_index init_device_type;
    static const std::type_index reinit_device_type;
-   
+
    // Helper method for calculation of sizes of sub-pools.
    static auto calculate_pools_sizes(unsigned pool_size) {
       if( 2u == pool_size)
@@ -106,7 +106,7 @@ class tricky_dispatcher_t
       // There is no need to do something.
    }
 
-   // Implementation of the method inherited from event_queue.
+   // Implementation of the methods inherited from event_queue.
    void push(so_5::execution_demand_t demand) override {
       if(init_device_type == demand.m_msg_type ||
             reinit_device_type == demand.m_msg_type) {
@@ -117,6 +117,18 @@ class tricky_dispatcher_t
          // That demand should go to the common queue.
          so_5::send<so_5::execution_demand_t>(other_demands_ch_, std::move(demand));
       }
+   }
+
+   void push_evt_start(so_5::execution_demand_t demand) override {
+      // There is no need to check the type of the demand.
+      so_5::send<so_5::execution_demand_t>(other_demands_ch_, std::move(demand));
+   }
+
+   // NOTE: don't care about exception, if the demand can't be stored
+   // into the queue the application has to be aborted anyway.
+   void push_evt_finish(so_5::execution_demand_t demand) noexcept override {
+      // There is no need to check the type of the demand.
+      so_5::send<so_5::execution_demand_t>(other_demands_ch_, std::move(demand));
    }
 
 public:
@@ -139,6 +151,7 @@ public:
    }
 
    // A factory for the creation of the dispatcher.
+   [[nodiscard]]
    static so_5::disp_binder_shptr_t make(
          so_5::environment_t & env, unsigned pool_size) {
       return std::make_shared<tricky_dispatcher_t>(env, pool_size);

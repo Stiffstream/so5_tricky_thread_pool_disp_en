@@ -1,7 +1,7 @@
 # What is it?
 
-This is a demo of the creation of own thread_pool dispatcher for SObjectizer-5.6.
-This dispatcher uses own demands sheduling policy. The full description of this example can be found [here](https://github.com/Stiffstream/sobjectizer/wiki/SO-5.6-Tutorials-TrickyThreadPool-Intro).
+This is a demo of the creation of own thread_pool dispatcher for SObjectizer-5.8.
+This dispatcher uses own demands sheduling policy. The full description of this example can be found [here](https://github.com/Stiffstream/sobjectizer/wiki/SO-5.8-Tutorials-TrickyThreadPool-Intro).
 
 There are two examples inside the repository:
 
@@ -10,7 +10,7 @@ There are two examples inside the repository:
 
 # How to get and try?
 
-It is necessary to use a C++ compiler with support for C++17 (checked under gcc-7.3 and vc++ 15.9).
+It is necessary to use a C++ compiler with support for C++17.
 
 CMake or Ruby+MxxRu are required.
 
