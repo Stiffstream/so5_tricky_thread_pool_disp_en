@@ -22,16 +22,23 @@ class tricky_dispatcher_t final
       explicit simple_latch_t(unsigned expected) : expected_{expected}
       {}
 
-      void count_down()
-      {
+      void count_down() {
          std::lock_guard<std::mutex> lock{lock_};
          ++actual_;
          if(actual_ == expected_)
             wakeup_cv_.notify_all();
       }
 
-      void wait()
-      {
+      //FIXME: document this!
+      void force_wakeup() {
+         std::lock_guard<std::mutex> lock{lock_};
+         if(actual_ < expected_) {
+            actual_ += expected_ - actual_;
+            wakeup_cv_.notify_all();
+         }
+      }
+
+      void wait() {
          std::unique_lock<std::mutex> lock{lock_};
          if(actual_ < expected_)
          {
@@ -88,6 +95,9 @@ class tricky_dispatcher_t final
       so_5::close_drop_content(so_5::terminate_if_throws, start_finish_ch_);
       so_5::close_drop_content(so_5::terminate_if_throws, init_reinit_ch_);
       so_5::close_drop_content(so_5::terminate_if_throws, other_demands_ch_);
+
+      // start_finish_thread should pass finish_latch_.
+      finish_latch_.force_wakeup();
 
       // Now all threads can be joined.
       for(auto & t : work_threads_)
