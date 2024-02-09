@@ -11,56 +11,55 @@ class tricky_dispatcher_t final
       , public so_5::event_queue_t {
 
    //FIXME: document this!
-   class simple_latch_t {
+   class meeting_room_t {
       std::mutex lock_;
       std::condition_variable wakeup_cv_;
 
-      const unsigned expected_;
-      unsigned actual_{};
+      unsigned attenders_{};
 
    public:
-      explicit simple_latch_t(unsigned expected) : expected_{expected}
-      {}
+      meeting_room_t() = default;
 
-      void count_down() {
+      void enter() {
          std::lock_guard<std::mutex> lock{lock_};
-         ++actual_;
-         if(actual_ == expected_)
+         ++attenders_;
+      }
+
+      void leave() {
+         std::lock_guard<std::mutex> lock{lock_};
+         --attenders_;
+         if(!attenders_)
             wakeup_cv_.notify_all();
       }
 
-      //FIXME: document this!
-      void force_wakeup() {
-         std::lock_guard<std::mutex> lock{lock_};
-         if(actual_ < expected_) {
-            actual_ += expected_ - actual_;
-            wakeup_cv_.notify_all();
-         }
-      }
-
-      void wait() {
+      void wait_for_emptiness() {
          std::unique_lock<std::mutex> lock{lock_};
-         if(actual_ < expected_)
+         if(attenders_)
          {
-            wakeup_cv_.wait(lock, [this]{ return actual_ >= expected_; });
+            wakeup_cv_.wait(lock, [this]{ return 0u == attenders_; });
          }
       }
    };
 
    //FIXME: document this!
-   class auto_count_down_t {
-      simple_latch_t & latch_;
+   class auto_enter_leave_t {
+      meeting_room_t & room_;
 
    public:
-      auto_count_down_t(simple_latch_t & latch) : latch_{latch} {}
-      ~auto_count_down_t() { latch_.count_down(); }
+      auto_enter_leave_t(meeting_room_t & room) : room_{room} {
+         room_.enter();
+      }
+      ~auto_enter_leave_t() {
+         room_.leave();
+      }
    };
 
    // Type of container for worker threads.
    using thread_pool_t = std::vector<std::thread>;
 
    // Channels to be used as event-queues.
-   so_5::mchain_t start_finish_ch_;
+   so_5::mchain_t start_ch_;
+   so_5::mchain_t finish_ch_;
    so_5::mchain_t init_reinit_ch_;
    so_5::mchain_t other_demands_ch_;
 
@@ -68,11 +67,9 @@ class tricky_dispatcher_t final
    thread_pool_t work_threads_;
 
    //FIXME: document this!
-   std::atomic<bool> worker_detected_;
-
-   //FIXME: document this!
-   simple_latch_t start_latch_{1u};
-   simple_latch_t finish_latch_;
+   meeting_room_t launch_room_;
+   meeting_room_t start_room_;
+   meeting_room_t finish_room_;
 
    static const std::type_index init_device_type;
    static const std::type_index reinit_device_type;
@@ -92,12 +89,10 @@ class tricky_dispatcher_t final
    // Helper method for shutdown and join all threads.
    void shutdown_work_threads() noexcept {
       // All channels should be closed first.
-      so_5::close_drop_content(so_5::terminate_if_throws, start_finish_ch_);
+      so_5::close_drop_content(so_5::terminate_if_throws, start_ch_);
+      so_5::close_drop_content(so_5::terminate_if_throws, finish_ch_);
       so_5::close_drop_content(so_5::terminate_if_throws, init_reinit_ch_);
       so_5::close_drop_content(so_5::terminate_if_throws, other_demands_ch_);
-
-      // start_finish_thread should pass finish_latch_.
-      finish_latch_.force_wakeup();
 
       // Now all threads can be joined.
       for(auto & t : work_threads_)
@@ -113,11 +108,14 @@ class tricky_dispatcher_t final
    void launch_work_threads(
          unsigned first_type_threads_count,
          unsigned second_type_threads_count) {
-      work_threads_.reserve(first_type_threads_count + second_type_threads_count + 1u);
+      work_threads_.reserve(first_type_threads_count + second_type_threads_count);
       try {
-         work_threads_.emplace_back([this]{ start_finish_thread_body(); });
+         //FIXME: document this!
+         auto_enter_leave_t launch_room_changer{launch_room_};
 
-         for(auto i = 0u; i < first_type_threads_count; ++i)
+         work_threads_.emplace_back([this]{ leader_thread_body(); });
+
+         for(auto i = 1u; i < first_type_threads_count; ++i)
             work_threads_.emplace_back([this]{ first_type_thread_body(); });
 
          for(auto i = 0u; i < second_type_threads_count; ++i)
@@ -135,35 +133,38 @@ class tricky_dispatcher_t final
    }
 
    //FIXME: document this!
-   void start_finish_thread_body() {
-      // Process evt_start.
-      so_5::receive(so_5::from(start_finish_ch_).handle_n(1),
-            exec_demand_handler);
+   void leader_thread_body() {
+std::cout << "*** leader_thread: waiting for launch_room ***" << std::endl;
+      launch_room_.wait_for_emptiness();
 
-      // All other threads can start their work now.
-      start_latch_.count_down();
+      {
+         auto_enter_leave_t start_room_changer{start_room_};
+         // Process evt_start.
+         so_5::receive(so_5::from(start_ch_).handle_n(1),
+               exec_demand_handler);
+std::cout << "*** leader_thread: evt_start processed ***" << std::endl;
+      }
 
-std::cout << "*** waiting for finish_latch ***" << std::endl;
+      //FIXME: document this!
+      first_type_thread_body();
 
-      // We should wait while all other threads completes their work.
-      finish_latch_.wait();
-
-std::cout << "*** waiting for evt_finish ***" << std::endl;
+std::cout << "*** leader_thread: waiting for finish_room ***" << std::endl;
+      //FIXME: document this!
+      finish_room_.wait_for_emptiness();
 
       // Process evt_finish.
-      so_5::receive(so_5::from(start_finish_ch_).handle_n(1),
+      so_5::receive(so_5::from(finish_ch_).handle_n(1),
             exec_demand_handler);
-
-std::cout << "*** start_finish_thread_body completed ***" << std::endl;
+std::cout << "*** leader_thread: evt_finish processed ***" << std::endl;
    }
 
    // The body for a thread of the first type.
    void first_type_thread_body() {
-      // Wait while evt_start is processed.
-      start_latch_.wait();
-
       // Processing of evt_finish has to be enabled at the end.
-      auto_count_down_t finish_latch_count_down{finish_latch_};
+      auto_enter_leave_t finish_room_changer{finish_room_};
+
+      // Wait while evt_start is processed.
+      start_room_.wait_for_emptiness();
 
       // Run until all channels will be closed.
       so_5::select(so_5::from_all().handle_all(),
@@ -175,11 +176,11 @@ std::cout << "*** first_type_thread_body completed ***" << std::endl;
 
    // The body for a thread of the second type.
    void second_type_thread_body() {
-      // Wait while evt_start is processed.
-      start_latch_.wait();
-
       // Processing of evt_finish has to be enabled at the end.
-      auto_count_down_t finish_latch_count_down{finish_latch_};
+      auto_enter_leave_t finish_room_changer{finish_room_};
+
+      // Wait while evt_start is processed.
+      start_room_.wait_for_emptiness();
 
       // Run until all channels will be closed.
       so_5::select(so_5::from_all().handle_all(),
@@ -190,16 +191,11 @@ std::cout << "*** second_type_thread_body completed ***" << std::endl;
 
    // Implementation of the methods inherited from disp_binder.
    void preallocate_resources(so_5::agent_t & /*agent*/) override {
-      // Resources may be allocated for just one agent only.
-      bool expected_value{false};
-      if(!worker_detected_.compare_exchange_strong(expected_value, true))
-         throw std::runtime_error{
-            "just one agent can be bound to the tricky_dispatcher_t"
-         };
+      // Nothing to do.
    }
 
    void undo_preallocation(so_5::agent_t & /*agent*/) noexcept override {
-      worker_detected_.store(false);
+      // Nothing to do.
    }
 
    void bind(so_5::agent_t & agent) noexcept override {
@@ -207,7 +203,7 @@ std::cout << "*** second_type_thread_body completed ***" << std::endl;
    }
 
    void unbind(so_5::agent_t & agent) noexcept override {
-      undo_preallocation(agent); // Just reuse the implementation.
+      // Nothing to do.
    }
 
    // Implementation of the methods inherited from event_queue.
@@ -224,7 +220,7 @@ std::cout << "*** second_type_thread_body completed ***" << std::endl;
    }
 
    void push_evt_start(so_5::execution_demand_t demand) override {
-      so_5::send<so_5::execution_demand_t>(start_finish_ch_, std::move(demand));
+      so_5::send<so_5::execution_demand_t>(start_ch_, std::move(demand));
    }
 
    // NOTE: don't care about exception, if the demand can't be stored
@@ -234,7 +230,7 @@ std::cout << "*** second_type_thread_body completed ***" << std::endl;
       so_5::close_retain_content(so_5::terminate_if_throws, init_reinit_ch_);
       so_5::close_retain_content(so_5::terminate_if_throws, other_demands_ch_);
 
-      so_5::send<so_5::execution_demand_t>(start_finish_ch_, std::move(demand));
+      so_5::send<so_5::execution_demand_t>(finish_ch_, std::move(demand));
 
 std::cout << "*** push_evt_finish completed ***" << std::endl;
    }
@@ -246,15 +242,20 @@ public:
          so_5::environment_t & env,
          // The size of the thread pool.
          unsigned pool_size)
-         :  start_finish_ch_{
+         :  start_ch_{
                so_5::create_mchain(env,
-                     2u, // Just evt_start and evt_finish
+                     1u, // Just evt_start.
+                     so_5::mchain_props::memory_usage_t::preallocated,
+                     so_5::mchain_props::overflow_reaction_t::abort_app)
+            }
+         ,  finish_ch_{
+               so_5::create_mchain(env,
+                     1u, // Just evt_finish
                      so_5::mchain_props::memory_usage_t::preallocated,
                      so_5::mchain_props::overflow_reaction_t::abort_app)
             }
          ,  init_reinit_ch_{so_5::create_mchain(env)}
          ,  other_demands_ch_{so_5::create_mchain(env)}
-         ,  finish_latch_{pool_size}
    {
       const auto [first_type_count, second_type_count] =
             calculate_pools_sizes(pool_size);
