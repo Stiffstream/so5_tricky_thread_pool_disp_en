@@ -58,7 +58,7 @@ class tricky_dispatcher_t final
    using thread_pool_t = std::vector<std::thread>;
 
    // Channels to be used as event-queues.
-   so_5::mchain_t start_ch_;
+   so_5::mchain_t start_finish_ch_;
    so_5::mchain_t finish_ch_;
    so_5::mchain_t init_reinit_ch_;
    so_5::mchain_t other_demands_ch_;
@@ -89,8 +89,7 @@ class tricky_dispatcher_t final
    // Helper method for shutdown and join all threads.
    void shutdown_work_threads() noexcept {
       // All channels should be closed first.
-      so_5::close_drop_content(so_5::terminate_if_throws, start_ch_);
-      so_5::close_drop_content(so_5::terminate_if_throws, finish_ch_);
+      so_5::close_drop_content(so_5::terminate_if_throws, start_finish_ch_);
       so_5::close_drop_content(so_5::terminate_if_throws, init_reinit_ch_);
       so_5::close_drop_content(so_5::terminate_if_throws, other_demands_ch_);
 
@@ -140,7 +139,7 @@ std::cout << "*** leader_thread: waiting for launch_room ***" << std::endl;
       {
          auto_enter_leave_t start_room_changer{start_room_};
          // Process evt_start.
-         so_5::receive(so_5::from(start_ch_).handle_n(1),
+         so_5::receive(so_5::from(start_finish_ch_).handle_n(1),
                exec_demand_handler);
 std::cout << "*** leader_thread: evt_start processed ***" << std::endl;
       }
@@ -220,7 +219,7 @@ std::cout << "*** second_type_thread_body completed ***" << std::endl;
    }
 
    void push_evt_start(so_5::execution_demand_t demand) override {
-      so_5::send<so_5::execution_demand_t>(start_ch_, std::move(demand));
+      so_5::send<so_5::execution_demand_t>(start_finish_ch_, std::move(demand));
    }
 
    // NOTE: don't care about exception, if the demand can't be stored
@@ -230,7 +229,7 @@ std::cout << "*** second_type_thread_body completed ***" << std::endl;
       so_5::close_retain_content(so_5::terminate_if_throws, init_reinit_ch_);
       so_5::close_retain_content(so_5::terminate_if_throws, other_demands_ch_);
 
-      so_5::send<so_5::execution_demand_t>(finish_ch_, std::move(demand));
+      so_5::send<so_5::execution_demand_t>(start_finish_ch_, std::move(demand));
 
 std::cout << "*** push_evt_finish completed ***" << std::endl;
    }
@@ -242,15 +241,9 @@ public:
          so_5::environment_t & env,
          // The size of the thread pool.
          unsigned pool_size)
-         :  start_ch_{
+         :  start_finish_ch_{
                so_5::create_mchain(env,
-                     1u, // Just evt_start.
-                     so_5::mchain_props::memory_usage_t::preallocated,
-                     so_5::mchain_props::overflow_reaction_t::abort_app)
-            }
-         ,  finish_ch_{
-               so_5::create_mchain(env,
-                     1u, // Just evt_finish
+                     2u, // Just evt_start and evt_finish.
                      so_5::mchain_props::memory_usage_t::preallocated,
                      so_5::mchain_props::overflow_reaction_t::abort_app)
             }
