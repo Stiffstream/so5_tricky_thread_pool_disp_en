@@ -15,6 +15,7 @@ class tricky_dispatcher_t final
       std::mutex lock_;
       std::condition_variable wakeup_cv_;
 
+      bool closed_{false};
       unsigned attenders_{};
 
    public:
@@ -22,21 +23,24 @@ class tricky_dispatcher_t final
 
       void enter() {
          std::lock_guard<std::mutex> lock{lock_};
+         if(closed_)
+            throw std::runtime_error{"meeting_room is closed"};
          ++attenders_;
       }
 
-      void leave() {
+      void leave() noexcept {
          std::lock_guard<std::mutex> lock{lock_};
          --attenders_;
          if(!attenders_)
             wakeup_cv_.notify_all();
       }
 
-      void wait_for_emptiness() {
+      void wait_then_close() {
          std::unique_lock<std::mutex> lock{lock_};
          if(attenders_)
          {
             wakeup_cv_.wait(lock, [this]{ return 0u == attenders_; });
+            closed_ = true;
          }
       }
    };
@@ -133,7 +137,7 @@ class tricky_dispatcher_t final
    //FIXME: document this!
    void leader_thread_body() {
 std::cout << "*** leader_thread: waiting for launch_room ***" << std::endl;
-      launch_room_.wait_for_emptiness();
+      launch_room_.wait_then_close();
 
       {
          auto_enter_leave_t start_room_changer{start_room_};
@@ -148,7 +152,7 @@ std::cout << "*** leader_thread: evt_start processed ***" << std::endl;
 
 std::cout << "*** leader_thread: waiting for finish_room ***" << std::endl;
       //FIXME: document this!
-      finish_room_.wait_for_emptiness();
+      finish_room_.wait_then_close();
 
       // Process evt_finish.
       so_5::receive(so_5::from(start_finish_ch_).handle_n(1),
@@ -162,7 +166,7 @@ std::cout << "*** leader_thread: evt_finish processed ***" << std::endl;
       auto_enter_leave_t finish_room_changer{finish_room_};
 
       // Wait while evt_start is processed.
-      start_room_.wait_for_emptiness();
+      start_room_.wait_then_close();
 
       // Run until all channels will be closed.
       so_5::select(so_5::from_all().handle_all(),
@@ -178,7 +182,7 @@ std::cout << "*** first_type_thread_body completed ***" << std::endl;
       auto_enter_leave_t finish_room_changer{finish_room_};
 
       // Wait while evt_start is processed.
-      start_room_.wait_for_emptiness();
+      start_room_.wait_then_close();
 
       // Run until all channels will be closed.
       so_5::select(so_5::from_all().handle_all(),
