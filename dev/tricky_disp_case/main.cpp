@@ -59,7 +59,6 @@ class tricky_dispatcher_t final
 
    // Channels to be used as event-queues.
    so_5::mchain_t start_finish_ch_;
-   so_5::mchain_t finish_ch_;
    so_5::mchain_t init_reinit_ch_;
    so_5::mchain_t other_demands_ch_;
 
@@ -152,7 +151,7 @@ std::cout << "*** leader_thread: waiting for finish_room ***" << std::endl;
       finish_room_.wait_for_emptiness();
 
       // Process evt_finish.
-      so_5::receive(so_5::from(finish_ch_).handle_n(1),
+      so_5::receive(so_5::from(start_finish_ch_).handle_n(1),
             exec_demand_handler);
 std::cout << "*** leader_thread: evt_finish processed ***" << std::endl;
    }
