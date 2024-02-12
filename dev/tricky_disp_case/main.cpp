@@ -11,7 +11,7 @@ class tricky_dispatcher_t final
       , public so_5::event_queue_t {
 
    //FIXME: document this!
-   class meeting_room_t {
+   class rundown_latch_t {
       std::mutex lock_;
       std::condition_variable wakeup_cv_;
 
@@ -19,16 +19,16 @@ class tricky_dispatcher_t final
       unsigned attenders_{};
 
    public:
-      meeting_room_t() = default;
+      rundown_latch_t() = default;
 
-      void enter() {
+      void acquire() {
          std::lock_guard<std::mutex> lock{lock_};
          if(closed_)
             throw std::runtime_error{"meeting_room is closed"};
          ++attenders_;
       }
 
-      void leave() noexcept {
+      void release() noexcept {
          std::lock_guard<std::mutex> lock{lock_};
          --attenders_;
          if(!attenders_)
@@ -46,15 +46,15 @@ class tricky_dispatcher_t final
    };
 
    //FIXME: document this!
-   class auto_enter_leave_t {
-      meeting_room_t & room_;
+   class auto_acquire_release_rundown_latch_t {
+      rundown_latch_t & room_;
 
    public:
-      auto_enter_leave_t(meeting_room_t & room) : room_{room} {
-         room_.enter();
+      auto_acquire_release_rundown_latch_t(rundown_latch_t & room) : room_{room} {
+         room_.acquire();
       }
-      ~auto_enter_leave_t() {
-         room_.leave();
+      ~auto_acquire_release_rundown_latch_t() {
+         room_.release();
       }
    };
 
@@ -70,9 +70,9 @@ class tricky_dispatcher_t final
    thread_pool_t work_threads_;
 
    //FIXME: document this!
-   meeting_room_t launch_room_;
-   meeting_room_t start_room_;
-   meeting_room_t finish_room_;
+   rundown_latch_t launch_room_;
+   rundown_latch_t start_room_;
+   rundown_latch_t finish_room_;
 
    static const std::type_index init_device_type;
    static const std::type_index reinit_device_type;
@@ -113,7 +113,7 @@ class tricky_dispatcher_t final
       work_threads_.reserve(first_type_threads_count + second_type_threads_count);
       try {
          //FIXME: document this!
-         auto_enter_leave_t launch_room_changer{launch_room_};
+         auto_acquire_release_rundown_latch_t launch_room_changer{launch_room_};
 
          work_threads_.emplace_back([this]{ leader_thread_body(); });
 
@@ -140,7 +140,7 @@ std::cout << "*** leader_thread: waiting for launch_room ***" << std::endl;
       launch_room_.wait_then_close();
 
       {
-         auto_enter_leave_t start_room_changer{start_room_};
+         auto_acquire_release_rundown_latch_t start_room_changer{start_room_};
          // Process evt_start.
          so_5::receive(so_5::from(start_finish_ch_).handle_n(1),
                exec_demand_handler);
@@ -163,7 +163,7 @@ std::cout << "*** leader_thread: evt_finish processed ***" << std::endl;
    // The body for a thread of the first type.
    void first_type_thread_body() {
       // Processing of evt_finish has to be enabled at the end.
-      auto_enter_leave_t finish_room_changer{finish_room_};
+      auto_acquire_release_rundown_latch_t finish_room_changer{finish_room_};
 
       // Wait while evt_start is processed.
       start_room_.wait_then_close();
@@ -179,7 +179,7 @@ std::cout << "*** first_type_thread_body completed ***" << std::endl;
    // The body for a thread of the second type.
    void second_type_thread_body() {
       // Processing of evt_finish has to be enabled at the end.
-      auto_enter_leave_t finish_room_changer{finish_room_};
+      auto_acquire_release_rundown_latch_t finish_room_changer{finish_room_};
 
       // Wait while evt_start is processed.
       start_room_.wait_then_close();
