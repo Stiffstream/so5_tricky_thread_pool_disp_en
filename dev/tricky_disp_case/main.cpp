@@ -212,7 +212,7 @@ class tricky_dispatcher_t final
       agent.so_bind_to_dispatcher(*this);
    }
 
-   void unbind(so_5::agent_t & agent) noexcept override {
+   void unbind(so_5::agent_t & /*agent*/) noexcept override {
       // Nothing to do.
    }
 
@@ -265,7 +265,7 @@ public:
 
       launch_work_threads(first_type_count, second_type_count);
    }
-   ~tricky_dispatcher_t() noexcept {
+   ~tricky_dispatcher_t() noexcept override {
       // All worker threads should be stopped.
       shutdown_work_threads();
    }
