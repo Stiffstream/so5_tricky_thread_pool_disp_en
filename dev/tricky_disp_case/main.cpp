@@ -10,7 +10,10 @@ class tricky_dispatcher_t final
       : public so_5::disp_binder_t
       , public so_5::event_queue_t {
 
-   //FIXME: document this!
+   // A kind of std::latch from C++20, but without a fixed number of participant.
+   // It's something similar to Run-Down Protection from Windows's kernel:
+   //
+   // https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/run-down-protection
    class rundown_latch_t {
       std::mutex lock_;
       std::condition_variable wakeup_cv_;
@@ -24,7 +27,7 @@ class tricky_dispatcher_t final
       void acquire() {
          std::lock_guard<std::mutex> lock{lock_};
          if(closed_)
-            throw std::runtime_error{"meeting_room is closed"};
+            throw std::runtime_error{"rundown_latch is closed"};
          ++attenders_;
       }
 
@@ -45,7 +48,7 @@ class tricky_dispatcher_t final
       }
    };
 
-   //FIXME: document this!
+   // A kind of std::lock_guard, but for rundown_latch_t.
    class auto_acquire_release_rundown_latch_t {
       rundown_latch_t & room_;
 
@@ -69,9 +72,16 @@ class tricky_dispatcher_t final
    // The pool of worker threads for that dispatcher.
    thread_pool_t work_threads_;
 
-   //FIXME: document this!
+   // Synchronization objects required for thread management.
+   //
+   // This one is for starting worker threads.
+   // The leader thread should wait while all workers are created.
    rundown_latch_t launch_room_;
+   // This one is for handling evt_start,
+   // All workers (except the leader) have to wait while evt_start completed.
    rundown_latch_t start_room_;
+   // This on is for handling evt_finish.
+   // The leader thread has to wait while all workers complete their work.
    rundown_latch_t finish_room_;
 
    static const std::type_index init_device_type;
@@ -112,11 +122,13 @@ class tricky_dispatcher_t final
          unsigned second_type_threads_count) {
       work_threads_.reserve(first_type_threads_count + second_type_threads_count);
       try {
-         //FIXME: document this!
+         // The leader has to be suspended until all workers will be created.
          auto_acquire_release_rundown_latch_t launch_room_changer{launch_room_};
 
+         // Start the leader thread first.
          work_threads_.emplace_back([this]{ leader_thread_body(); });
 
+         // Now we can launch all remaining workers.
          for(auto i = 1u; i < first_type_threads_count; ++i)
             work_threads_.emplace_back([this]{ first_type_thread_body(); });
 
@@ -134,30 +146,30 @@ class tricky_dispatcher_t final
       d.call_handler(so_5::null_current_thread_id());
    }
 
-   //FIXME: document this!
+   // The body of the leader thread.
    void leader_thread_body() {
-std::cout << "*** leader_thread: waiting for launch_room ***" << std::endl;
+      // We have to wait while all workers are created.
+      // NOTE: not all of them can start their work actually, but all
+      // std::thread objects should be created.
       launch_room_.wait_then_close();
 
       {
+         // We have to block all other threads until evt_start will be processed.
          auto_acquire_release_rundown_latch_t start_room_changer{start_room_};
          // Process evt_start.
          so_5::receive(so_5::from(start_finish_ch_).handle_n(1),
                exec_demand_handler);
-std::cout << "*** leader_thread: evt_start processed ***" << std::endl;
       }
 
-      //FIXME: document this!
+      // Now the leader can play the role of the first thread type.
       first_type_thread_body();
 
-std::cout << "*** leader_thread: waiting for finish_room ***" << std::endl;
-      //FIXME: document this!
+      // All worker should finish their work before processing of evt_finish.
       finish_room_.wait_then_close();
 
       // Process evt_finish.
       so_5::receive(so_5::from(start_finish_ch_).handle_n(1),
             exec_demand_handler);
-std::cout << "*** leader_thread: evt_finish processed ***" << std::endl;
    }
 
    // The body for a thread of the first type.
@@ -172,8 +184,6 @@ std::cout << "*** leader_thread: evt_finish processed ***" << std::endl;
       so_5::select(so_5::from_all().handle_all(),
             receive_case(init_reinit_ch_, exec_demand_handler),
             receive_case(other_demands_ch_, exec_demand_handler));
-
-std::cout << "*** first_type_thread_body completed ***" << std::endl;
    }
 
    // The body for a thread of the second type.
@@ -187,8 +197,6 @@ std::cout << "*** first_type_thread_body completed ***" << std::endl;
       // Run until all channels will be closed.
       so_5::select(so_5::from_all().handle_all(),
             receive_case(other_demands_ch_, exec_demand_handler));
-
-std::cout << "*** second_type_thread_body completed ***" << std::endl;
    }
 
    // Implementation of the methods inherited from disp_binder.
@@ -232,9 +240,8 @@ std::cout << "*** second_type_thread_body completed ***" << std::endl;
       so_5::close_retain_content(so_5::terminate_if_throws, init_reinit_ch_);
       so_5::close_retain_content(so_5::terminate_if_throws, other_demands_ch_);
 
+      // Now we can store the evt_finish demand in the special chain.
       so_5::send<so_5::execution_demand_t>(start_finish_ch_, std::move(demand));
-
-std::cout << "*** push_evt_finish completed ***" << std::endl;
    }
 
 public:
