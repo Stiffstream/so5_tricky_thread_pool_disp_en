@@ -99,15 +99,7 @@ public:
       device_t::id_t id{};
       for(unsigned i = 0; i != args_.device_count_; ++i, ++id)
          so_5::send<init_device_t>(*this, id);
-
-      //FIXME: remove after debugging!
-      so_deregister_agent_coop_normally();
    }
-
-//FIXME: remove after debugging!
-void so_evt_finish() override {
-   std::cout << "a_device_manager_t finishes its work!" << std::endl;
-}
 
 private:
    const args_t args_;
